@@ -17,6 +17,7 @@ import (
 	"sync"
 	"testing"
 	"testing/quick"
+	"time"
 	. "time"
 )
 
@@ -1391,6 +1392,32 @@ func TestMarshalBinaryZeroTime(t *testing.T) {
 	}
 	if t1 != t0 {
 		t.Errorf("t0=%#v\nt1=%#v\nwant identical structures", t0, t1)
+	}
+}
+
+func TestMarshalBinaryVersion2(t *testing.T) {
+	t0, err := time.Parse(time.RFC3339, "1880-01-01T00:00:00Z")
+	if err != nil {
+		t.Errorf("Failed to parse time, error = %v", err)
+	}
+	loc, err := time.LoadLocation("US/Eastern")
+	if err != nil {
+		t.Errorf("Failed to load location, error = %v", err)
+	}
+	t1 := t0.In(loc)
+	b, err := t1.MarshalBinary()
+	if err != nil {
+		t.Errorf("Failed to Marshal, error = %v", err)
+	}
+
+	t2 := time.Time{}
+	err = t2.UnmarshalBinary(b)
+	if err != nil {
+		t.Errorf("Failed to Unmarshal, error = %v", err)
+	}
+
+	if !(t0.Equal(t1) && t1.Equal(t2)) {
+		t.Errorf("The result after Unmarshal is not matched")
 	}
 }
 
