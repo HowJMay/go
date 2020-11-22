@@ -7,6 +7,7 @@ package net
 import (
 	"context"
 	"os"
+	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -140,9 +141,26 @@ func (c *UnixConn) ReadMsgUnix(b, oob []byte) (n, oobn, flags int, addr *UnixAdd
 	if !c.ok() {
 		return 0, 0, 0, nil, syscall.EINVAL
 	}
-	n, oobn, flags, addr, err = c.readMsg(b, oob)
+
+	switch runtime.GOOS {
+	case "darwin": // MacOS
+		n, oobn, flags, addr, err = c.readMsg(b, oob)
+	default: // Linux
+		// Send syscall `recvmsg` with `MSG_CMSG_CLOEXEC` flag on Linux
+		n, oobn, flags, addr, err = recvMsg(b, oob, syscall.MSG_CMSG_CLOEXEC)
+	}
+
 	if err != nil {
 		err = &OpError{Op: "read", Net: c.fd.net, Source: c.fd.laddr, Addr: c.fd.raddr, Err: err}
+	}
+	return
+}
+
+// Use syscall `recvmsg` on Linux
+func (c *UnixConn) recvMsg(b, oob []byte, flag int) (n, oobn, flags int, addr *UnixAddr, err error) {
+	n, oobn, flags, sa, err = syscall.Recvmsg(c.fd.pfd.Sysfd, b, oob, flag)
+	if sa.Name != "" {
+		addr = &UnixAddr{Name: sa.Name, Net: sotypeToNet(c.fd.sotype)}
 	}
 	return
 }
